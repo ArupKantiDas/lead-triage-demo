@@ -5,23 +5,31 @@ import { DatabaseSync } from "node:sqlite";
 import path from "path";
 import fs from "fs";
 
-const DATA_DIR = process.env.DATA_DIR || "/data";
-
-// Ensure data directory exists (for local dev outside Docker)
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-const DB_PATH = path.join(DATA_DIR, "lead-triage.sqlite");
-
-let db: DatabaseSync;
+let db: DatabaseSync | undefined;
 
 export function getDb(): DatabaseSync {
   if (!db) {
-    db = new DatabaseSync(DB_PATH);
+    const dataDir = process.env.DATA_DIR || "/data";
+    // Ensure data directory exists (for local dev outside Docker)
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    const dbPath = path.join(dataDir, "lead-triage.sqlite");
+    db = new DatabaseSync(dbPath);
     migrate(db);
   }
   return db;
+}
+
+/**
+ * Close and discard the current DB connection.
+ * Intended for tests only — lets each test start with a fresh DATA_DIR.
+ */
+export function resetDb(): void {
+  if (db) {
+    db.close();
+    db = undefined;
+  }
 }
 
 function migrate(db: DatabaseSync): void {

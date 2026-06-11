@@ -98,7 +98,17 @@ qualification is the model's; the routing is configuration.
 - **Non-goals:** not multi-tenant; no CRM write-back; no analytics dashboard; no
   auth/UI beyond the demo.
 
-## 11. Open items (traceable, not invented)
+## 11. n8n 2.25.7 compatibility (applied 2026-06-11)
+
+The workflow was fixed for n8n 2.25.7 (`n8nio/n8n:latest`). Breaking changes from the original build:
+
+- **HTTP Request body serialization**: Nodes that send structured JSON bodies (LLM Classify, Post to Slack, Slack Alert nodes) now use `specifyBody: "json"` + `jsonBody` expression. The original `contentType: "json"` + `body` template string is silently dropped to empty keypairs on import by n8n 2.25.7.
+- **continueErrorOutput connections**: All error-output connections are now declared as `main[1]` in the connections JSON. The `"error"` key is not followed by n8n's execution engine for `continueErrorOutput` nodes — only `main` connections are traversed.
+- **IF node type validation**: `Valid?` and `Already Seen?` now use `typeValidation: "loose"` to prevent strict-mode boolean type errors.
+- **Sidecar keypair calls**: All sidecar HTTP nodes explicitly set `contentType: "json"` so keypair parameters are serialized as JSON objects, not form-encoded strings.
+- **crypto module**: `NODE_FUNCTION_ALLOW_BUILTIN: crypto` is set in docker-compose.yml.
+
+## 12. Open items (traceable, not invented)
 - **No `docs/domain.md`** — this demo predates the domain-first (DDD) standard.
 - **No automated test suite** — verification is via the three demo scripts + the
   QA/Security gate docs; it predates the TDD standard (no `tests/` folder).

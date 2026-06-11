@@ -158,6 +158,17 @@ Then restart: `docker compose restart n8n`.
 
 ---
 
+## n8n version note
+
+This workflow is tested and verified on **n8n 2.25.7** (`n8nio/n8n:latest` as of 2026-06-11).
+The docker-compose.yml sets two required env vars for this n8n version:
+- `N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"` — allows `$env.VAR` in expressions and Code nodes.
+- `NODE_FUNCTION_ALLOW_BUILTIN: crypto` — allows `require('crypto')` in Code nodes (used for the idempotency key hash).
+
+These are already present in the shipped `docker-compose.yml`. No manual action needed.
+
+---
+
 ## Self-host notes — persistent volumes
 
 **This demo uses named Docker volumes (`lead_triage_n8n_data`, `lead_triage_sqlite_data`).**
