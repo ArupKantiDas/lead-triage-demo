@@ -1,0 +1,28 @@
+# Secrets and local config — never commit these
+.env
+*.env.local
+
+# SQLite databases
+*.sqlite
+*.sqlite3
+*.db
+
+# Node
+node_modules/
+service/node_modules/
+
+# TypeScript build output
+service/dist/
+
+# n8n local data (when running outside Docker)
+.n8n/
+n8n_data/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp

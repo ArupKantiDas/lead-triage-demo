@@ -1,0 +1,101 @@
+version: "3.9"
+
+# ── Lead Triage Demo — docker-compose ────────────────────────────────────────
+# Brings up: n8n (OSS) + the Node/TypeScript sidecar on a shared network.
+# All secrets/config live in .env (copy .env.example → .env and fill in values).
+#
+# PERSISTENT VOLUMES:
+#   n8n_data   — stores n8n workflow definitions, executions, and credentials.
+#   sqlite_data — stores the SQLite database (processed_leads, dead_letter, runs).
+#   Named volumes survive "docker compose down"; use "docker compose down -v"
+#   ONLY if you want to wipe all state.
+#
+# WARNING: If you deploy to a platform with ephemeral storage (Render free tier,
+# Heroku dynos) the volumes will be wiped on restart. Use a platform with
+# persistent block storage (Railway, Fly.io with attached volumes, VPS).
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  sidecar:
+    build:
+      context: ./service
+      dockerfile: Dockerfile
+    container_name: lead-triage-sidecar
+    restart: unless-stopped
+    environment:
+      PORT: "3001"
+      DATA_DIR: /data
+      NODE_ENV: production
+    volumes:
+      - sqlite_data:/data
+    networks:
+      - triage-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: lead-triage-n8n
+    restart: unless-stopped
+    depends_on:
+      sidecar:
+        condition: service_healthy
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      # n8n core
+      N8N_HOST: ${N8N_HOST:-localhost}
+      N8N_PORT: "5678"
+      N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
+      WEBHOOK_URL: ${WEBHOOK_URL:-http://localhost:5678}
+      N8N_BASIC_AUTH_ACTIVE: ${N8N_BASIC_AUTH_ACTIVE:-false}
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER:-}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD:-}
+
+      # Execution settings
+      EXECUTIONS_PROCESS: main
+      EXECUTIONS_DATA_SAVE_ON_ERROR: all
+      EXECUTIONS_DATA_SAVE_ON_SUCCESS: all
+      EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS: "true"
+
+      # Sidecar base URL (internal Docker network)
+      SIDECAR_URL: http://sidecar:3001
+
+      # LLM (Groq default; swap to any OpenAI-compatible endpoint via env)
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.groq.com/openai/v1}
+      LLM_MODEL: ${LLM_MODEL:-llama3-8b-8192}
+      LLM_API_KEY: ${LLM_API_KEY}
+
+      # Slack incoming webhooks
+      SLACK_WEBHOOK_HOT: ${SLACK_WEBHOOK_HOT}
+      SLACK_WEBHOOK_WARM: ${SLACK_WEBHOOK_WARM}
+      SLACK_WEBHOOK_COLD: ${SLACK_WEBHOOK_COLD}
+      SLACK_WEBHOOK_ALERTS: ${SLACK_WEBHOOK_ALERTS}
+
+      # Allow workflow expressions to read env vars via $env.VAR_NAME.
+      # n8n blocks this by default since v0.213; the workflow requires it for
+      # SIDECAR_URL, LLM_*, and SLACK_WEBHOOK_* references in every HTTP node.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+
+      # Timezone
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-UTC}
+      TZ: ${GENERIC_TIMEZONE:-UTC}
+
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - triage-net
+
+networks:
+  triage-net:
+    driver: bridge
+
+volumes:
+  n8n_data:
+    name: lead_triage_n8n_data
+  sqlite_data:
+    name: lead_triage_sqlite_data
