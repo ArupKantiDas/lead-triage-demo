@@ -11,6 +11,10 @@
 # ─────────────────────────────────────────────────────────────────────────────
 name: ci
 
+# Least privilege — these jobs only read the checked-out tree.
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
