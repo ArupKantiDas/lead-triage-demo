@@ -33,7 +33,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Node 24: the sidecar uses node:sqlite (built-in, available 22.5+;
+          # unflagged on Node 24). Node 20 lacks it → ERR_UNKNOWN_BUILTIN_MODULE.
+          node-version: '24'
       - run: npm ci
       # Biome = formatter + linter in one. `biome ci` is check-only (never writes).
       - run: npx @biomejs/biome ci .
@@ -49,7 +51,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Node 24: the sidecar uses node:sqlite (built-in, available 22.5+;
+          # unflagged on Node 24). Node 20 lacks it → ERR_UNKNOWN_BUILTIN_MODULE.
+          node-version: '24'
       - run: npm ci
       - run: npm run typecheck
 
@@ -64,7 +68,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Node 24: the sidecar uses node:sqlite (built-in, available 22.5+;
+          # unflagged on Node 24). Node 20 lacks it → ERR_UNKNOWN_BUILTIN_MODULE.
+          node-version: '24'
       - run: npm ci
       - run: npm test
 
