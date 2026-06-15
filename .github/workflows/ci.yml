@@ -1,11 +1,12 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Orchestra — standard PRODUCT CI gate (lead-triage-demo)
 #
-# Four hard, build-failing jobs:
-#   lint        — Biome formatter + linter, zero findings (SA-1)
-#   typecheck   — types are part of the contract
-#   test        — the project's test suite (red-gate TDD)
-#   secret-scan — gitleaks; no secret ever lands (SEC-09)
+# Five hard, build-failing jobs:
+#   lint             — Biome formatter + linter, zero findings (SA-1)
+#   typecheck        — types are part of the contract
+#   test             — the project's test suite (red-gate TDD)
+#   dependency-audit — no HIGH/CRITICAL vuln in shipped (production) deps
+#   secret-scan      — gitleaks; no secret ever lands (SEC-09)
 #
 # Node project lives in service/ — npm steps use working-directory: service.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -74,6 +75,25 @@ jobs:
       - run: npm ci
       - run: npm test
 
+  # Dependency vulnerabilities (supply chain). Gate: fail on HIGH/CRITICAL in
+  # SHIPPED (production) deps. Full audit printed for visibility but never blocks.
+  dependency-audit:
+    name: dependency audit (prod deps, high+)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - name: Full audit (informational — never blocks)
+        run: npm audit || true
+      - name: Gate — no HIGH/CRITICAL in production deps
+        run: npm audit --omit=dev --audit-level=high
+
   # SEC-09 — non-bypassable secret scan. Detection rules + allowlist: .gitleaks.toml
   secret-scan:
     name: gitleaks — secret scan (SEC-09)
@@ -82,11 +102,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Install gitleaks
+      - name: Install gitleaks (pinned + SHA256-verified)
         run: |
           GITLEAKS_VERSION="8.30.1"
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
-            | tar -xz -C /usr/local/bin gitleaks
+          GITLEAKS_SHA256="551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o gitleaks.tar.gz
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz -C /usr/local/bin gitleaks
+          rm gitleaks.tar.gz
           gitleaks version
       - name: Run gitleaks
         run: gitleaks detect --no-banner --redact -c .gitleaks.toml
