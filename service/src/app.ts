@@ -29,9 +29,16 @@ app.post("/idempotency/check", async (c) => {
 
   const db = getDb();
   const row = db
-    .prepare("SELECT key, created_at, slack_ts, classification FROM processed_leads WHERE key = ?")
+    .prepare(
+      "SELECT key, created_at, slack_ts, classification FROM processed_leads WHERE key = ?",
+    )
     .get(key) as
-    | { key: string; created_at: string; slack_ts: string | null; classification: string | null }
+    | {
+        key: string;
+        created_at: string;
+        slack_ts: string | null;
+        classification: string | null;
+      }
     | undefined;
 
   if (row) {
@@ -61,7 +68,7 @@ app.post("/idempotency/commit", async (c) => {
 
   const db = getDb();
   db.prepare(
-    "INSERT OR REPLACE INTO processed_leads (key, classification, slack_ts, created_at) VALUES (?, ?, ?, datetime('now'))"
+    "INSERT OR REPLACE INTO processed_leads (key, classification, slack_ts, created_at) VALUES (?, ?, ?, datetime('now'))",
   ).run(key, classification, slack_ts ?? null);
 
   return c.json({ ok: true });
@@ -88,11 +95,11 @@ app.post("/deadletter", async (c) => {
 
   const db = getDb();
   db.prepare(
-    "INSERT INTO dead_letter (key, reason, payload, created_at) VALUES (?, ?, ?, datetime('now'))"
+    "INSERT INTO dead_letter (key, reason, payload, created_at) VALUES (?, ?, ?, datetime('now'))",
   ).run(
     key ?? null,
     reason,
-    typeof payload === "string" ? payload : JSON.stringify(payload)
+    typeof payload === "string" ? payload : JSON.stringify(payload),
   );
 
   return c.json({ ok: true });
@@ -116,7 +123,7 @@ app.post("/runs", async (c) => {
 
   const db = getDb();
   db.prepare(
-    "INSERT INTO runs (key, status, detail, created_at) VALUES (?, ?, ?, datetime('now'))"
+    "INSERT INTO runs (key, status, detail, created_at) VALUES (?, ?, ?, datetime('now'))",
   ).run(key ?? null, status, detail ?? null);
 
   return c.json({ ok: true });
@@ -127,8 +134,16 @@ app.post("/runs", async (c) => {
 app.get("/runs", (c) => {
   const db = getDb();
   const rows = db
-    .prepare("SELECT id, key, status, detail, created_at FROM runs ORDER BY id DESC LIMIT 50")
-    .all() as { id: number; key: string | null; status: string; detail: string | null; created_at: string }[];
+    .prepare(
+      "SELECT id, key, status, detail, created_at FROM runs ORDER BY id DESC LIMIT 50",
+    )
+    .all() as {
+    id: number;
+    key: string | null;
+    status: string;
+    detail: string | null;
+    created_at: string;
+  }[];
   return c.json({ runs: rows });
 });
 
@@ -137,7 +152,15 @@ app.get("/runs", (c) => {
 app.get("/deadletter", (c) => {
   const db = getDb();
   const rows = db
-    .prepare("SELECT id, key, reason, payload, created_at FROM dead_letter ORDER BY id DESC LIMIT 50")
-    .all() as { id: number; key: string | null; reason: string; payload: string; created_at: string }[];
+    .prepare(
+      "SELECT id, key, reason, payload, created_at FROM dead_letter ORDER BY id DESC LIMIT 50",
+    )
+    .all() as {
+    id: number;
+    key: string | null;
+    reason: string;
+    payload: string;
+    created_at: string;
+  }[];
   return c.json({ dead_letter: rows });
 });
