@@ -1,0 +1,122 @@
+# .gitleaks.toml — Secret-scanning config for lead-triage-demo
+# Gitleaks 8.x format (TOML). Uses Go RE2 regex (no lookaheads).
+#
+# DETECTS:
+#   - Credentialed postgres/postgresql DSNs (postgres://user:password@host)
+#   - Neon npg_ password tokens (>=8 alphanum chars after npg_)
+#   - Provider keys: sk-…, ghp_…, AKIA…
+#   - HTTP Bearer tokens (non-trivial length)
+#   - KEY="hardcoded-value" secret assignments (quoted values only)
+#
+# DOES NOT FALSE-POSITIVE on:
+#   - process.env.* reads
+#   - [REDACTED:…] markers
+#   - Documented secret-pattern examples (truncated forms ending in …)
+#
+# INSTALL LOCALLY:  brew install gitleaks
+# RUN LOCALLY:      gitleaks detect -c .gitleaks.toml --no-banner
+# CI GATE:          .github/workflows/ci.yml (secret-scan job — non-bypassable)
+
+title = "lead-triage-demo secret scan"
+
+[extend]
+useDefault = true
+
+# ─── Custom rules ─────────────────────────────────────────────────────────────
+
+[[rules]]
+id          = "postgres-dsn-with-password"
+description = "Credentialed postgres(ql):// DSN — user:password@host"
+# >=6 chars for password segment to avoid matching template examples ending in …
+regex       = '''postgres(?:ql)?://[^:@\s/]+:[^@\s\.]{6,}@[^\s'"]+'''
+tags        = ["secret", "database", "credentials"]
+
+  [rules.allowlist]
+  description = "Exclude placeholder/example DSNs in docs"
+  regexes = [
+    # Truncated doc examples using … (not real credentials)
+    '''postgres(?:ql)?://[^@]+@[^\s]+\.\.\.|postgres(?:ql)?://\.\.\.|…''',
+    # Template placeholders
+    '''postgres(?:ql)?://USER:PASSWORD@HOST''',
+  ]
+
+[[rules]]
+id          = "neon-npg-token"
+description = "Neon password token — npg_ followed by >=8 alphanumeric chars"
+# >=8 chars: avoids short fragments used in documentation narrative
+regex       = '''npg_[A-Za-z0-9]{8,}'''
+tags        = ["secret", "neon", "token"]
+
+  [rules.allowlist]
+  description = "Exclude synthetic test tokens and redacted marker forms"
+  regexes = [
+    # Synthetic FAKE tokens (in tests)
+    '''npg_FAKE[A-Za-z0-9]+''',
+    # Redacted marker form
+    '''npg_\[REDACTED\]''',
+  ]
+
+[[rules]]
+id          = "openai-sk-key"
+description = "OpenAI / Anthropic / provider sk- API key"
+regex       = '''sk-[A-Za-z0-9_\-]{20,}'''
+tags        = ["secret", "api-key"]
+
+[[rules]]
+id          = "github-pat"
+description = "GitHub Personal Access Token (ghp_)"
+regex       = '''ghp_[A-Za-z0-9]{36,}'''
+tags        = ["secret", "github", "token"]
+
+[[rules]]
+id          = "aws-access-key"
+description = "AWS Access Key ID (AKIA…)"
+regex       = '''AKIA[A-Z0-9]{16}'''
+tags        = ["secret", "aws", "credentials"]
+
+[[rules]]
+id          = "http-bearer-token"
+description = "HTTP Authorization Bearer token (non-trivial length)"
+regex       = '''Bearer\s+[A-Za-z0-9_\-\.]{20,}'''
+tags        = ["secret", "bearer", "token"]
+
+[[rules]]
+id          = "secret-key-value-quoted"
+description = "Hardcoded quoted value for known sensitive variable names (>=8 chars)"
+# Quoted form only — avoids false-positives on process.env reads and doc examples.
+regex       = '''(?i)(PASSWORD|SECRET|TOKEN|API_KEY|DSN|DATABASE_URL)\s*=\s*["'][^"']{8,}["']'''
+tags        = ["secret", "env-var"]
+
+  [rules.allowlist]
+  description = "Exclude [REDACTED] markers, FAKE values, process.env, and doc examples"
+  regexes = [
+    # [REDACTED:*] markers
+    '''\[REDACTED(?::[a-z]+)?\]''',
+    # FAKE test values
+    '''FAKE''',
+    # Template placeholders
+    '''postgresql://\.\.\.|USER:PASSWORD@HOST''',
+    # process.env references in quoted strings (template literals)
+    '''process\.env\.''',
+  ]
+
+# ─── Global allowlist ─────────────────────────────────────────────────────────
+
+[allowlist]
+description = "Global: docs, example files, redacted markers"
+
+# Regex patterns safe globally:
+regexes = [
+    # [REDACTED:…] output marker
+    '''\[REDACTED(?::[a-z]+)?\]''',
+    # Synthetic FAKE test tokens
+    '''npg_FAKE[A-Za-z0-9]+''',
+    # Placeholder DSN forms
+    '''postgresql://USER:PASSWORD@HOST''',
+    # Redacted Neon token marker
+    '''npg_\[REDACTED\]''',
+    # process.env reads
+    '''=\s*process\.env\.[A-Z_]+''',
+    # Truncated doc examples ending in …
+    '''@[^\s]+\.\.\."""''',
+]

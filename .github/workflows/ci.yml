@@ -1,0 +1,82 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Orchestra — standard PRODUCT CI gate (lead-triage-demo)
+#
+# Four hard, build-failing jobs:
+#   lint        — Biome formatter + linter, zero findings (SA-1)
+#   typecheck   — types are part of the contract
+#   test        — the project's test suite (red-gate TDD)
+#   secret-scan — gitleaks; no secret ever lands (SEC-09)
+#
+# Node project lives in service/ — npm steps use working-directory: service.
+# ─────────────────────────────────────────────────────────────────────────────
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # SA-1 — style is automated, not argued. Formatter + linter, zero findings.
+  lint:
+    name: lint + format (SA-1)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      # Biome = formatter + linter in one. `biome ci` is check-only (never writes).
+      - run: npx @biomejs/biome ci .
+
+  # Types are part of the contract — a green typecheck is non-negotiable.
+  typecheck:
+    name: typecheck
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm run typecheck
+
+  # Red-gate TDD — the suite must pass before anything ships.
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm test
+
+  # SEC-09 — non-bypassable secret scan. Detection rules + allowlist: .gitleaks.toml
+  secret-scan:
+    name: gitleaks — secret scan (SEC-09)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        run: |
+          GITLEAKS_VERSION="8.30.1"
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+      - name: Run gitleaks
+        run: gitleaks detect --no-banner --redact -c .gitleaks.toml
