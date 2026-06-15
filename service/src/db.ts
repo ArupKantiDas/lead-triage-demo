@@ -1,9 +1,9 @@
+import fs from "node:fs";
+import path from "node:path";
 // Uses Node.js built-in sqlite (node:sqlite), available since Node 22.5.0.
 // No native compilation required — pure JS, zero extra dependencies.
 // The Docker image pins node:22-alpine or later; locally Node 22+ is required.
 import { DatabaseSync } from "node:sqlite";
-import path from "path";
-import fs from "fs";
 
 let db: DatabaseSync | undefined;
 
