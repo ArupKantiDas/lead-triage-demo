@@ -36,7 +36,7 @@ from pathlib import Path
 
 # Bump when the trigger set or structure rules change; check_product_ci.py compares each
 # product's vendored copy against this and flags a mismatch (re-vendor). See ADR-0011.
-GATE_EVIDENCE_CHECK_VERSION = "1"
+GATE_EVIDENCE_CHECK_VERSION = "2"
 
 # The empty tree — diff target when there is no resolvable base (new branch / first push).
 _EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
@@ -61,6 +61,11 @@ SECURITY_CONTENT_PATTERNS = [
         r"access-control-allow",
         r"\bcors\b",
         r"\b(crypto|cipher|hmac|bcrypt|pbkdf2|scrypt)\b",
+        # Cryptographic hashing — explicit digest tokens, NOT bare `hash`: `\bhash\b` misses the
+        # real call sites (`hashlib.sha256`, `password_hash` — the \b fails against `hashlib`/`_hash`)
+        # yet fires on benign `obj.hash` / `# commit hash`. `digest` is excluded as overloaded
+        # (RSS / email / HTTP-Digest auth). Keep in lockstep with the GATE-EVIDENCE.md crypto bullet.
+        r"\b(hashlib|sha1|sha224|sha256|sha384|sha512|md5|blake2b|blake2s|createhash)\b",
         # BOUNDED quantifiers, not `.+` — an unbounded `.+...\bfrom` is quadratic ReDoS on a
         # long near-miss line (SEC-GE-01). A real SQL statement keyword-to-keyword span is short.
         r"\bselect\b.{1,200}?\bfrom\b",
