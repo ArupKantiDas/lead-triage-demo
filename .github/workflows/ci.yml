@@ -1,14 +1,16 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Orchestra — standard PRODUCT CI gate (lead-triage-demo)
 #
-# Five hard, build-failing jobs:
+# Six hard, build-failing jobs:
 #   lint             — Biome formatter + linter, zero findings (SA-1)
 #   typecheck        — types are part of the contract
 #   test             — the project's test suite (red-gate TDD)
 #   dependency-audit — no HIGH/CRITICAL vuln in shipped (production) deps
 #   secret-scan      — gitleaks; no secret ever lands (SEC-09)
+#   gate-evidence    — security/UI change can't merge without its docs/gates/ evidence (ADR-0011)
 #
 # Node project lives in service/ — npm steps use working-directory: service.
+# The gate-evidence job runs at the REPO ROOT (tools/gate/ + docs/gates/ live there).
 # ─────────────────────────────────────────────────────────────────────────────
 name: ci
 
@@ -113,3 +115,33 @@ jobs:
           gitleaks version
       - name: Run gitleaks
         run: gitleaks detect --no-banner --redact -c .gitleaks.toml
+
+  # ADR-0011 / GATE-EVIDENCE.md — the gate you can't skip. Runs a VENDORED copy of the
+  # company's tools/evals/check_security_enumeration.py (keep byte-identical; the company's
+  # check_product_ci.py flags drift). Runs at the REPO ROOT (no working-directory: service).
+  # A security-sensitive diff must commit docs/gates/<slug>-security-review.md; a UI/behavioral
+  # diff must commit docs/gates/<slug>-qa-gate.md — in the SAME PR, else this job hard-fails.
+  gate-evidence:
+    name: gate — required evidence (ADR-0011)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Required gate evidence (SR-6 / VR-4)
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            BASE="$PR_BASE"; HEAD="$PR_HEAD"
+          else
+            BASE="$PUSH_BEFORE"; HEAD="$PUSH_AFTER"
+          fi
+          python3 tools/gate/check_security_enumeration.py --base "$BASE" --head "$HEAD"
