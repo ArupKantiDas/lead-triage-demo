@@ -36,7 +36,7 @@ from pathlib import Path
 
 # Bump when the trigger set or structure rules change; check_product_ci.py compares each
 # product's vendored copy against this and flags a mismatch (re-vendor). See ADR-0011.
-GATE_EVIDENCE_CHECK_VERSION = "2"
+GATE_EVIDENCE_CHECK_VERSION = "3"
 
 # The empty tree — diff target when there is no resolvable base (new branch / first push).
 _EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
@@ -115,6 +115,37 @@ _EXCLUDED_CHECK_NAMES = {
     "check_gate_evidence.py",
 }
 
+# Dependency lockfiles are GENERATED dependency-resolution metadata, never a hand-authored
+# runtime surface. npm records each dependency's Subresource-Integrity digest as
+# `"integrity": "sha512-…"` — which matches the crypto-digest content pattern on EVERY entry
+# — so a one-line dev-dependency bump that regenerates the lockfile would otherwise be forced
+# to carry a security review (false trigger). Exclude by basename, the same treatment as docs/
+# and .md. This does NOT open a bypass: the real supply-chain surface is the MANIFEST
+# (package.json / pyproject.toml — NOT excluded, still scanned) plus the CI dependency-audit
+# gate (npm audit / pip-audit / osv-scanner); a lockfile carries no executable/reviewable code,
+# only a name→version→hash table. Keep in lockstep with GATE-EVIDENCE.md.
+_LOCKFILE_NAMES = frozenset(
+    {
+        "package-lock.json",
+        "npm-shrinkwrap.json",
+        "yarn.lock",
+        "pnpm-lock.yaml",
+        "bun.lock",
+        "bun.lockb",
+        "composer.lock",
+        "Gemfile.lock",
+        "poetry.lock",
+        "Pipfile.lock",
+        "uv.lock",
+        "Cargo.lock",
+        "go.sum",
+        "flake.lock",
+        "Podfile.lock",
+        "gradle.lockfile",
+        "packages.lock.json",
+    }
+)
+
 
 def is_excluded(path: str) -> bool:
     """A changed path that should never itself trigger a gate.
@@ -122,14 +153,15 @@ def is_excluded(path: str) -> bool:
     Excluded: docs/ (prose); ANY Markdown file (.md) — policy / docs / agent + command
     definitions describe security keywords but are not a shipped runtime surface, so a
     keyword in prose must not demand a security review (the real surface lives in code or
-    config, never .md); and the gate tooling itself. Note: executable controls like
-    .claude/hooks/*.sh are NOT excluded — those are real security surfaces.
+    config, never .md); dependency LOCKFILES (generated hash tables — see _LOCKFILE_NAMES);
+    and the gate tooling itself. Note: executable controls like .claude/hooks/*.sh are NOT
+    excluded — those are real security surfaces.
     """
     p = path.replace("\\", "/")
     if p.startswith("docs/") or p.endswith(".md"):
         return True
     name = p.rsplit("/", 1)[-1]
-    return name in _EXCLUDED_CHECK_NAMES
+    return name in _EXCLUDED_CHECK_NAMES or name in _LOCKFILE_NAMES
 
 
 # ── Structure validators (anti-stub; presence + minimal shape, never quality) ──
